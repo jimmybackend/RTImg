@@ -1,226 +1,190 @@
 # RTImg
 
-**RTImg** is the native image codec of the **RT Stack** ecosystem by **Rethra Communications**.
+**RTImg** es el códec de imagen nativo del ecosistema **RT Stack** de **Rethra Communications**.
 
-`RT` stands for **Resilient Transmission**.
+`RT` significa **Resilient Transmission**.
 
-RTImg is designed as an **open, extensible, deterministic, tile-based image format** intended for internal use across the RT ecosystem, with controlled import/export interoperability to external formats.
+RTImg nace como un formato de imagen **abierto, extensible, determinista y orientado a tiles**, pensado para ser la representación interna canónica de imagen dentro de **RTCore**, **RTStream** y **RTCloud**.
 
----
+## Estado real del proyecto
 
-## Project status
+**Estado actual:** diseño técnico inicial + especificación abierta v0.1 + prototipo de referencia en Python.
 
-**Current status:** early open specification + reference prototype
+Hoy el proyecto define de forma realista:
 
-This repository defines:
+- un formato binario propio
+- un perfil base **lossless**
+- procesamiento por **tiles independientes**
+- metadata técnica en estructura tipo TLV
+- encoder, decoder y parser de referencia en Python
+- una hoja de ruta para evolución hacia perfiles **lossy** y puertos a **C** y **Rust**
 
-- an open binary image format
-- a reference encoder/decoder design
-- a practical lossless-first roadmap
-- future integration points with:
-  - **RTCore**
-  - **RTStream**
-  - **RTCloud**
+RTImg **no** pretende reemplazar a PNG, JPEG, WebP, AVIF o JPEG XL como formato universal de la web. Su objetivo es distinto: ser el **formato interno de trabajo** del universo RT.
 
-The first production goal is **a stable lossless v0 profile** with a clean path toward future lossy profiles.
+## Papel de RTImg dentro de RT Stack
 
----
+RTImg debe ocupar este lugar dentro del stack:
 
-## Why RTImg exists
+- **Entrada externa:** RT Stack puede aceptar PNG, JPEG, WebP, AVIF u otros formatos.
+- **Normalización interna:** esos activos se convierten a RTImg.
+- **Procesamiento interno:** RTCore opera sobre RTImg como formato canónico.
+- **Transporte:** RTStream puede transmitir tiles o regiones concretas.
+- **Persistencia y trazabilidad:** RTCloud puede almacenar RTImg con metadata operativa y de integridad.
+- **Salida controlada:** la interoperabilidad externa se resuelve por exportación o decodificación controlada.
 
-RTImg is **not** meant to replace universal consumer image formats such as PNG, JPEG, WebP, AVIF, or JPEG XL in the open web.
+## Principios de diseño
 
-Its purpose is different:
+### 1. Formato interno nativo
+Toda imagen que entra al ecosistema puede representarse en RTImg.
 
-- accept external image formats at system boundaries
-- convert them into a **native RT internal representation**
-- enable deterministic processing in RT pipelines
-- support robust tile-based decoding and retransmission
-- carry operational metadata relevant to RT services
-- allow controlled export back to external formats when needed
+### 2. Especificación abierta
+El bitstream debe ser público e implementable por terceros.
 
-In short:
+### 3. Comportamiento determinista
+Misma entrada + mismo perfil + mismos parámetros = mismo resultado reproducible.
 
-> RTImg is the internal image substrate of RT Stack, not just another generic image file format.
+### 4. Resiliencia por tiles
+El formato se apoya en tiles para favorecer:
 
----
+- decodificación parcial
+- paralelismo
+- aislamiento de corrupción
+- retransmisión selectiva
+- futura integración con RTStream
 
-## Design principles
+### 5. Metadata operativa
+RTImg no guarda solo datos visuales; también debe poder transportar:
 
-RTImg is designed around the following principles:
+- procedencia
+- linaje de pipeline
+- identificadores internos
+- políticas de exportación
+- hashes de integridad
 
-### 1. Native internal format
-All imagery entering the RT ecosystem can be normalized into RTImg.
+### 6. Arquitectura extensible
+El diseño se plantea como familia de perfiles:
 
-### 2. Open specification
-The bitstream and structures are documented publicly.
+- **RTImg-L**: lossless
+- **RTImg-Q**: lossy / perceptual
+- perfiles futuros progresivos o por capas
 
-### 3. Deterministic behavior
-Same input + same profile + same settings should produce reproducible output.
+## Decisión técnica actual
 
-### 4. Tile-based resilience
-Images are partitioned into independent tiles to improve:
+La decisión más realista para arrancar es:
 
-- partial decoding
-- streaming
-- corruption isolation
-- retransmission efficiency
-- parallel encoding/decoding
+- **arquitectura híbrida a nivel de formato**
+- **implementación inicial lossless**
 
-### 5. Metadata for systems, not just files
-RTImg metadata is intended to support operational workflows, provenance, and policy enforcement.
+Eso permite validar el bitstream, las herramientas y el roundtrip exacto antes de entrar en transformadas, cuantización y tuning perceptual.
 
-### 6. Extensible profiles
-The architecture is designed to support:
-
-- **lossless** profiles
-- **lossy** profiles
-- future progressive or layered transport
-
----
-
-## Scope of v0
-
-The recommended initial direction is:
-
-- **Architecture:** hybrid and extensible
-- **Reference implementation:** **lossless-first**
-
-This means the format should reserve room for lossy operation in the future, but the first stable implementation should focus on exact round-trip reconstruction.
-
-### Why lossless first
-
-Because it allows:
-
-- exact validation
-- simpler interoperability testing
-- stable test vectors
-- easier parser and decoder verification
-- lower implementation risk
-
----
-
-## Core architecture
-
-RTImg is structured around these major components:
+## Arquitectura actual propuesta
 
 ### Encoder
-Responsible for:
-
-- ingesting normalized pixel data
-- dividing the image into tiles
-- applying spatial prediction
-- generating residuals
-- compressing tile payloads
-- writing the RTImg bitstream
+- adapta la imagen de entrada
+- normaliza modo y canales
+- divide en tiles
+- aplica predicción espacial
+- genera residuos
+- comprime payloads por tile
+- escribe el bitstream RTImg
 
 ### Decoder
-Responsible for:
-
-- parsing the bitstream
-- validating headers and checksums
-- decoding tiles
-- reconstructing pixels
-- rebuilding the full image in memory
-- exporting when required
+- parsea el archivo
+- valida cabecera y checksums
+- descomprime tiles
+- reconstruye píxeles
+- rearma la imagen final
 
 ### Parser
-A dedicated parser layer is recommended so the format can be:
-
-- inspected without full decode
-- validated independently
-- reused by tools and services
+- interpreta el contenedor
+- valida la estructura
+- expone metadata y descriptores sin necesidad de decodificar toda la imagen
 
 ### Bitstream
-The RTImg bitstream is versioned and structured for future compatibility.
-
-### Metadata layer
-Metadata should be machine-friendly, deterministic, and optionally extensible using TLV-like structures.
-
----
-
-## Recommended v0 capabilities
-
-The initial practical profile should support:
-
-- image modes:
-  - grayscale (`L`)
-  - RGB
-  - RGBA
-- bit depth:
-  - 8-bit per channel
-- tile-based storage
-- per-tile payload compression
-- metadata TLV records
-- per-tile integrity checks
-- reference encoder and decoder
-
----
-
-## Bitstream overview
-
-A simplified RTImg file layout looks like this:
+Estructura general:
 
 ```text
-[FIXED HEADER]
-[METADATA TLV SECTION]
+[HEADER FIJO]
+[METADATA TLV]
 [TILE DESCRIPTOR 0][TILE PAYLOAD 0]
 [TILE DESCRIPTOR 1][TILE PAYLOAD 1]
 ...
 [TILE DESCRIPTOR N][TILE PAYLOAD N]
 ```
 
-Each tile is independently addressable and decodable within the constraints of the selected profile.
+## Capacidades reales del prototipo actual
 
----
+El prototipo Python incluido en este repositorio soporta:
 
-## What makes RTImg special in RT Stack
+- imágenes `L`, `RGB`, `RGBA`
+- 8 bits por canal
+- predictor `none`, `left`, `up`, `avg`, `paeth`
+- compresión `raw` o `zlib`
+- metadata TLV simple
+- CRC32 por tile
+- decodificación exacta en perfil **lossless**
 
-RTImg is valuable because it can be deeply integrated into the broader platform.
+## Qué hace especial a RTImg
 
-### RTCore
-- internal normalized image representation
-- deterministic image preprocessing
-- pipeline-safe metadata handling
+RTImg tiene sentido si su ventaja es sistémica, no solo de ratio de compresión:
 
-### RTStream
-- tile-aware transmission
-- selective retransmission
-- partial delivery strategies
-- future layered transport support
+- representación canónica de imagen en RT Stack
+- tiles independientes y retransmisibles
+- metadata orientada a operaciones reales
+- decodificación parcial por región
+- alineación futura con streaming y cloud
+- control explícito de importación y exportación
 
-### RTCloud
-- storage with provenance and integrity metadata
-- chunk-aware persistence
-- controlled export workflows
+## Comparación honesta
 
----
+### Frente a PNG
+PNG seguirá siendo superior como formato lossless universal. RTImg puede ser mejor como formato interno con tiles, checksums y metadata operacional.
 
-## Honest comparison with existing formats
+### Frente a JPEG
+JPEG seguirá siendo formato de distribución masiva. RTImg encaja mejor como formato nativo de trabajo interno.
 
-### PNG
-PNG remains stronger for broad lossless interoperability and universal support.
-RTImg can be better for tile-level resilience and internal metadata workflows.
+### Frente a WebP
+WebP es un formato generalista. RTImg es un formato de sistema.
 
-### JPEG
-JPEG remains strong for ubiquitous photographic distribution.
-RTImg is more appropriate as a controlled internal format.
+### Frente a AVIF
+AVIF gana en compresión moderna agresiva. RTImg no busca superarlo en esta fase.
 
-### WebP
-WebP is a strong general-purpose web format.
-RTImg is more system-oriented and operationally structured.
+### Frente a JPEG XL
+JPEG XL es el competidor técnico más serio si se habla de ambición moderna de códec. RTImg sigue teniendo sentido si su foco es integración profunda con RT Stack, resiliencia y operación controlada.
 
-### AVIF
-AVIF is stronger for aggressive modern compression.
-RTImg should not try to outcompete AVIF in v0.
+## Roadmap resumido
 
-### JPEG XL
-JPEG XL is technically closer in ambition to what a modern image system can be.
-RTImg still makes sense if its advantage is ecosystem integration, resilience, and controlled transport.
+### Fase 0
+- diseño del bitstream
+- definición de header, metadata y tiles
+- congelar el perfil lossless base
 
----
+### Fase 1
+- encoder/decoder/parser en Python
+- corpus de pruebas
+- roundtrip exacto
 
-## Repository layout
+### Fase 2
+- publicación de la especificación v0.1
+- test vectors oficiales
+- inspector de archivos
+
+### Fase 3
+- port a C del parser y decoder
+- encoder C después
+
+### Fase 4
+- port a Rust
+- crates `core`, `bitstream`, `cli`
+
+### Fase 5
+- perfil lossy experimental
+- YCbCr
+- transformadas
+- cuantización
+- métricas comparativas
+
+## Estructura del repositorio
 
 ```text
 rtimg/
@@ -229,174 +193,26 @@ rtimg/
 ├── CHANGELOG.md
 ├── CONTRIBUTING.md
 ├── CODE_OF_CONDUCT.md
+├── .gitignore
 ├── docs/
-│   ├── rtimg-overview.md
-│   ├── bitstream-spec.md
-│   ├── lossless-profile.md
-│   ├── lossy-profile-draft.md
-│   ├── metadata-tlv.md
-│   ├── rtstack-integration.md
-│   └── test-vectors.md
+│   └── project-overview.md
 ├── specs/
-│   ├── rtimg-v0.1.md
-│   ├── rtimg-header.md
-│   ├── rtimg-tile-packet.md
-│   └── rtimg-metadata.md
-├── reference/
-│   ├── python/
-│   │   └── rtimg_v0.py
-│   ├── c/
-│   │   ├── include/
-│   │   │   └── rtimg.h
-│   │   ├── src/
-│   │   │   ├── parser.c
-│   │   │   ├── encoder.c
-│   │   │   ├── decoder.c
-│   │   │   └── crc32.c
-│   │   └── tests/
-│   └── rust/
-│       ├── rtimg-core/
-│       ├── rtimg-cli/
-│       └── tests/
-├── testdata/
-│   ├── input/
-│   ├── encoded/
-│   ├── decoded/
-│   └── corpus/
-├── tools/
-│   ├── inspect_rtimg.py
-│   ├── gen_test_vectors.py
-│   └── compare_psnr.py
-├── tests/
-│   ├── test_roundtrip.py
-│   ├── test_parser.py
-│   ├── test_tiles.py
-│   ├── test_metadata.py
-│   └── test_corruption.py
-└── ci/
-    └── github-actions/
+│   └── rtimg-v0.1.md
+└── reference/
+    └── python/
+        └── rtimg_v0.py
 ```
 
----
+## Uso del prototipo
 
-## Roadmap
+```bash
+pip install pillow
+python reference/python/rtimg_v0.py encode input.png output.rti --tile 64 --predictor paeth
+python reference/python/rtimg_v0.py decode output.rti restored.png
+python reference/python/rtimg_v0.py inspect output.rti
+python reference/python/rtimg_v0.py psnr input.png restored.png
+```
 
-### Phase 0 — Specification draft
-- define header
-- define metadata model
-- define tile packets
-- reserve profiles and flags
+## Nota importante
 
-### Phase 1 — Python reference implementation
-- parser
-- inspector
-- encoder
-- decoder
-- roundtrip tests
-
-### Phase 2 — Public v0.1 spec freeze
-- freeze header and tile format
-- publish test vectors
-- validate compatibility rules
-
-### Phase 3 — C implementation
-- parser first
-- decoder second
-- encoder third
-- focus on performance and deployability
-
-### Phase 4 — Rust implementation
-- safe bitstream parsing
-- reusable core crates
-- CLI and service integration
-
-### Phase 5 — Experimental lossy profile
-- color transform support
-- transform coding
-- quantization
-- quality modes
-- metric benchmarking
-
-### Phase 6 — RT ecosystem integration
-- RTCore ingestion
-- RTStream transport
-- RTCloud persistence and governance
-
----
-
-## Reference prototype
-
-A first prototype can begin in Python for speed of iteration and spec validation.
-
-Suggested starting points:
-
-- Pillow for image IO
-- zlib for initial entropy compression
-- CRC32 for tile integrity checks
-- simple predictors such as:
-  - none
-  - left
-  - up
-  - average
-  - paeth
-
-The Python version should be treated as:
-
-- a reference implementation
-- a test-vector generator
-- a parser validation tool
-
-not as the final performance target.
-
----
-
-## Long-term goals
-
-RTImg should evolve into a format that supports:
-
-- exact internal normalization
-- tile-aware resilience
-- partial region decode
-- strong provenance metadata
-- deterministic pipelines
-- controlled external interoperability
-- future transport and cloud-native workflows
-
----
-
-## Contributing
-
-At this stage, contributions are most useful in these areas:
-
-- bitstream review
-- parser design validation
-- lossless test vectors
-- metadata model review
-- corruption and resilience testing
-- C and Rust port planning
-
----
-
-## License
-
-Recommended: permissive open source licensing for adoption and review.
-
-Good candidates:
-
-- MIT
-- Apache-2.0
-
-Choose based on whether patent language and explicit contribution terms are desired.
-
----
-
-## Summary
-
-RTImg is an open-source, native RT Stack image codec focused on:
-
-- deterministic internal representation
-- tile-based resilience
-- extensible open bitstream design
-- future integration with RTCore, RTStream, and RTCloud
-
-Its strongest initial path is a **lossless-first implementation** with an architecture ready for future lossy evolution.
+Este repositorio representa el **estado real actual** del proyecto: una base seria, abierta y coherente para empezar RTImg correctamente, pero todavía lejos de una versión de producción madura.
